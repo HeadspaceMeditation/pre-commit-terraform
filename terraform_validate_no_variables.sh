@@ -15,10 +15,10 @@ for path_uniq in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
   path_uniq="${path_uniq//__REPLACED__SPACE__/ }"
 
   pushd "$path_uniq" > /dev/null
-  echo "Running validate..."
+  >&2 echo "Running validate..."
   terraform validate -check-variables=false
 
-  echo "Exit code: $?"
+  >&2 echo "Exit code: $?"
 
   if [[ "$?" -ne 0 ]]; then
     echo
