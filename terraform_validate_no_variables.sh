@@ -4,6 +4,9 @@ set -e
 declare -a paths
 index=0
 
+echo "Starting..."
+echo "$@"
+
 for file_with_path in "$@"; do
   file_with_path="${file_with_path// /__REPLACED__SPACE__}"
 
