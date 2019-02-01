@@ -18,11 +18,11 @@ for path_uniq in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
   set +e
   terraform validate -check-variables=false
 
+  echo "I am here"
   if [[ "$?" -ne 0 ]]; then
     echo
     echo "Failed path: $path_uniq"
     echo "================================"
-    exit 1
   fi
   
   set -e
