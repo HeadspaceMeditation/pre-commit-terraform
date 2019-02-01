@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 declare -a paths
 index=0
@@ -14,9 +15,11 @@ for path_uniq in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
   path_uniq="${path_uniq//__REPLACED__SPACE__/ }"
 
   pushd "$path_uniq" > /dev/null
+  echo "Running validate..."
   terraform validate -check-variables=false
 
-  echo "I am here"
+  echo "Exit code: $?"
+
   if [[ "$?" -ne 0 ]]; then
     echo
     echo "Failed path: $path_uniq"
