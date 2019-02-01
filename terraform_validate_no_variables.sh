@@ -21,7 +21,7 @@ for path_uniq in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
 
   if [[ "$?" -ne 0 ]]; then
     >&2 echo
-    >&2 echo "Failed path: $(pwd)"
+    >&2 echo "Failed path: $path_uniq"
     >&2 echo "================================"
     exit 1
   fi
