@@ -11,7 +11,7 @@ for file_with_path in "$@"; do
   let "index+=1"
 done
 
-echo "${paths[*]}" | tr ' ' '\n' | sort -u
+echo "${paths[*]}" | tr ' ' '\n' | sort | uniq
 for path_uniq in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
   path_uniq="${path_uniq//__REPLACED__SPACE__/ }"
 
