@@ -22,6 +22,7 @@ for path_uniq in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
     echo
     echo "Failed path: $path_uniq"
     echo "================================"
+    exit 1
   fi
   
   set -e
