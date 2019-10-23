@@ -14,6 +14,14 @@
   files: (\.tf)$
   exclude: \.terraform\/.*$
 
+- id: terraform_readme
+  name: Terraform Readme
+  description: Creates a README for Terraform modules using `terraform_config_inspect`.
+  entry: terraform_readme.sh
+  language: script
+  files: (\.tf)$
+  exclude: \.terraform\/.*$
+
 - id: terraform_validate_no_variables
   name: Terraform validate without variables
   description: Validates all Terraform configuration files without checking whether all required variables were set (basic check).
