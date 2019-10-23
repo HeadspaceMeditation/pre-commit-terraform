@@ -16,7 +16,7 @@
 
 - id: terraform_readme
   name: Terraform Readme
-  description: Creates readme for terraform modules.
+  description: Creates a README for Terraform modules using `terraform_config_inspect`.
   entry: terraform_readme.sh
   language: script
   files: (\.tf)$
