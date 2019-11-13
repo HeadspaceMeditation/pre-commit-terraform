@@ -21,6 +21,7 @@
   language: script
   files: (\.tf)$
   exclude: \.terraform\/.*$
+  require_serial: true
 
 
 - id: terraform_validate_no_variables
