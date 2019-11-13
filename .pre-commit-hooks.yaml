@@ -5,6 +5,7 @@
   language: script
   files: (\.tf|\.tfvars)$
   exclude: \.terraform\/.*$
+  require_serial: true
 
 - id: terraform_docs
   name: Terraform Docs
