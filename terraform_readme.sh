@@ -4,6 +4,13 @@ set -e
 declare -a paths
 declare -a tfvars_files
 
+if [[ $(terraform-config-inspect --version) != "0.2.0" ]]; then
+  echo "Please install the latest version of terraform-config-inspect, by running:"
+  echo "go get -u github.com/HeadspaceMeditation/terraform-config-inspect"
+  echo "For further help reach out to the ops team."
+  exit 1
+fi
+
 index=0
 
 for file_with_path in "$@"; do
