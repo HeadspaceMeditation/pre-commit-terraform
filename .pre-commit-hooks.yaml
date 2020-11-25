@@ -91,3 +91,8 @@
   exclude: \.terraform\/.*$
   require_serial: true
 
+- id: terraform_tfsec_report_only
+  name: Terraform validate with tfsec
+  description: Static analysis of Terraform templates to spot potential security issues.
+  entry: terraform_tfsec_test.sh
+  language: script
