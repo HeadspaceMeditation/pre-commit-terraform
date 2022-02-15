@@ -1,55 +1,42 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-main() {
-  initialize_
-  parse_cmdline_ "$@"
-  terraform_docs_ "${ARGS[*]}" "${FILES[@]}"
+# globals variables
+# hook ID, see `- id` for details in .pre-commit-hooks.yaml file
+# shellcheck disable=SC2034 # Unused var.
+readonly HOOK_ID='terraform_docs'
+# shellcheck disable=SC2155 # No way to assign to readonly variable in separate lines
+readonly SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+# shellcheck source=_common.sh
+. "$SCRIPT_DIR/_common.sh"
+
+function main {
+  common::initialize "$SCRIPT_DIR"
+  common::parse_cmdline "$@"
+  # Support for setting relative PATH to .terraform-docs.yml config.
+  # shellcheck disable=SC2178 # It's the simplest syntax for that case
+  ARGS=${ARGS[*]/--config=/--config=$(pwd)\/}
+  # shellcheck disable=SC2128 # It's the simplest syntax for that case
+  # shellcheck disable=SC2153 # False positive
+  terraform_docs_ "${HOOK_CONFIG[*]}" "$ARGS" "${FILES[@]}"
 }
 
-initialize_() {
-  # get directory containing this script
-  local dir
-  local source
-  source="${BASH_SOURCE[0]}"
-  while [[ -L $source ]]; do # resolve $source until the file is no longer a symlink
-    dir="$(cd -P "$(dirname "$source")" > /dev/null && pwd)"
-    source="$(readlink "$source")"
-    # if $source was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-    [[ $source != /* ]] && source="$dir/$source"
-  done
-  _SCRIPT_DIR="$(dirname "$source")"
-
-  # source getopt function
-  # shellcheck source=lib_getopt
-  . "$_SCRIPT_DIR/lib_getopt"
-}
-
-parse_cmdline_() {
-  declare argv
-  argv=$(getopt -o a: --long args: -- "$@") || return
-  eval "set -- $argv"
-
-  for argv; do
-    case $argv in
-      -a | --args)
-        shift
-        ARGS+=("$1")
-        shift
-        ;;
-      --)
-        shift
-        FILES=("$@")
-        break
-        ;;
-    esac
-  done
-}
-
-terraform_docs_() {
-  local -r args="$1"
-  shift
+#######################################################################
+# Function which prepares hacks for old versions of `terraform` and
+# `terraform-docs` that them call `terraform_docs`
+# Arguments:
+#   hook_config (string with array) arguments that configure hook behavior
+#   args (string with array) arguments that configure wrapped tool behavior
+#   files (array) filenames to check
+#######################################################################
+function terraform_docs_ {
+  local -r hook_config="$1"
+  local -r args="$2"
+  shift 2
   local -a -r files=("$@")
+
+  # Get hook settings
+  IFS=";" read -r -a configs <<< "$hook_config"
 
   local hack_terraform_docs
   hack_terraform_docs=$(terraform version | sed -n 1p | grep -c 0.12) || true
@@ -64,7 +51,7 @@ terraform_docs_() {
 
   if [[ -z "$is_old_terraform_docs" ]]; then # Using terraform-docs 0.8+ (preferred)
 
-    terraform_docs "0" "$args" "${files[@]}"
+    terraform_docs "0" "${configs[*]}" "$args" "${files[@]}"
 
   elif [[ "$hack_terraform_docs" == "1" ]]; then # Using awk script because terraform-docs is older than 0.8 and terraform 0.12 is used
 
@@ -76,24 +63,36 @@ terraform_docs_() {
     local tmp_file_awk
     tmp_file_awk=$(mktemp "${TMPDIR:-/tmp}/terraform-docs-XXXXXXXXXX")
     terraform_docs_awk "$tmp_file_awk"
-    terraform_docs "$tmp_file_awk" "$args" "${files[@]}"
+    terraform_docs "$tmp_file_awk" "${configs[*]}" "$args" "${files[@]}"
     rm -f "$tmp_file_awk"
 
   else # Using terraform 0.11 and no awk script is needed for that
 
-    terraform_docs "0" "$args" "${files[@]}"
+    terraform_docs "0" "${configs[*]}" "$args" "${files[@]}"
 
   fi
 }
 
-terraform_docs() {
+#######################################################################
+# Wrapper around `terraform-docs` tool that check and change/create
+# (depends on provided hook_config) terraform documentation in
+# markdown format
+# Arguments:
+#   terraform_docs_awk_file (string) filename where awk hack for old
+#     `terraform-docs` was written. Needed for TF 0.12+.
+#     Hack skipped when `terraform_docs_awk_file == "0"`
+#   hook_config (string with array) arguments that configure hook behavior
+#   args (string with array) arguments that configure wrapped tool behavior
+#   files (array) filenames to check
+#######################################################################
+function terraform_docs {
   local -r terraform_docs_awk_file="$1"
-  local -r args="$2"
-  shift 2
+  local -r hook_config="$2"
+  local -r args="$3"
+  shift 3
   local -a -r files=("$@")
 
   declare -a paths
-  declare -a tfvars_files
 
   local index=0
   local file_with_path
@@ -102,25 +101,81 @@ terraform_docs() {
 
     paths[index]=$(dirname "$file_with_path")
 
-    if [[ "$file_with_path" == *".tfvars" ]]; then
-      tfvars_files+=("$file_with_path")
-    fi
-
     ((index += 1))
   done
 
   local -r tmp_file=$(mktemp)
-  local -r text_file="README.md"
 
-  local path_uniq
-  for path_uniq in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
-    path_uniq="${path_uniq//__REPLACED__SPACE__/ }"
+  #
+  # Get hook settings
+  #
+  local text_file="README.md"
+  local add_to_existing=false
+  local create_if_not_exist=false
 
-    pushd "$path_uniq" > /dev/null
+  read -r -a configs <<< "$hook_config"
 
-    if [[ ! -f "$text_file" ]]; then
-      popd > /dev/null
-      continue
+  for c in "${configs[@]}"; do
+
+    IFS="=" read -r -a config <<< "$c"
+    key=${config[0]}
+    value=${config[1]}
+
+    case $key in
+      --path-to-file)
+        text_file=$value
+        ;;
+      --add-to-existing-file)
+        add_to_existing=$value
+        ;;
+      --create-file-if-not-exist)
+        create_if_not_exist=$value
+        ;;
+    esac
+  done
+
+  local dir_path
+  for dir_path in $(echo "${paths[*]}" | tr ' ' '\n' | sort -u); do
+    dir_path="${dir_path//__REPLACED__SPACE__/ }"
+
+    pushd "$dir_path" > /dev/null || continue
+
+    #
+    # Create file if it not exist and `--create-if-not-exist=true` provided
+    #
+    if $create_if_not_exist && [[ ! -f "$text_file" ]]; then
+      dir_have_tf_files="$(
+        find . -maxdepth 1 -type f | sed 's|.*\.||' | sort -u | grep -oE '^tf$|^tfvars$' ||
+          exit 0
+      )"
+
+      # if no TF files - skip dir
+      [ ! "$dir_have_tf_files" ] && popd > /dev/null && continue
+
+      dir="$(dirname "$text_file")"
+
+      mkdir -p "$dir"
+      {
+        echo -e "# ${PWD##*/}\n"
+        echo "<!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->"
+        echo "<!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->"
+      } >> "$text_file"
+    fi
+
+    # If file still not exist - skip dir
+    [[ ! -f "$text_file" ]] && popd > /dev/null && continue
+
+    #
+    # If `--add-to-existing-file=true` set, check is in file exist "hook markers",
+    # and if not - append "hook markers" to the end of file.
+    #
+    if $add_to_existing; then
+      HAVE_MARKER=$(grep -o '<!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->' "$text_file" || exit 0)
+
+      if [ ! "$HAVE_MARKER" ]; then
+        echo "<!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->" >> "$text_file"
+        echo "<!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->" >> "$text_file"
+      fi
     fi
 
     if [[ "$terraform_docs_awk_file" == "0" ]]; then
@@ -152,7 +207,13 @@ terraform_docs() {
   done
 }
 
-terraform_docs_awk() {
+#######################################################################
+# Function which creates file with `awk` hacks for old versions of
+# `terraform-docs`
+# Arguments:
+#   output_file (string) filename where hack will be written to
+#######################################################################
+function terraform_docs_awk {
   local -r output_file=$1
 
   cat << "EOF" > "$output_file"
@@ -311,8 +372,4 @@ EOF
 
 }
 
-# global arrays
-declare -a ARGS=()
-declare -a FILES=()
-
-[[ ${BASH_SOURCE[0]} != "$0" ]] || main "$@"
+[ "${BASH_SOURCE[0]}" != "$0" ] || main "$@"
