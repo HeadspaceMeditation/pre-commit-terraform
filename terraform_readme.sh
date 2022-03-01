@@ -4,9 +4,10 @@ set -e
 declare -a paths
 declare -a tfvars_files
 
-if [[ $(terraform-config-inspect --version) != "0.3.0" ]]; then
+TCI_VERSION="0.3.1"
+if [[ $(terraform-config-inspect --version) != "$TCI_VERSION" ]]; then
   echo "Please install the latest version of terraform-config-inspect, by running:"
-  echo "go get -u github.com/HeadspaceMeditation/terraform-config-inspect"
+  echo "go install github.com/HeadspaceMeditation/terraform-config-inspect@${TCI_VERSION}"
   echo "Note: you may need to delete the $GOPATH/src/github.com/zclconf/go-cty directory because it changed from master -> main in GitHub."
   echo "For further help reach out to the ops team."
   exit 1
